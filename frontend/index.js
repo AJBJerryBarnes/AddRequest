@@ -7,7 +7,10 @@
 // 10/6/23	 v1.4 Jerry Barnes	Add a quantity to what is requested
 // 16/7/23	 v1.5 Jerry Barnes	Add facility to expand/contract items by catagory
 //								and a filter for the item name
+// 20/1/26   v1.6 Jerry Barnes	Make search any characters not just start of name, add stock level display
 //
+// The need table is called RequestItem now
+// The template table is call catalogue now
 // 
 
 import { FormField, Input, ViewPicker, initializeBlock,useGlobalConfig, useSettingsButton, 
@@ -24,8 +27,9 @@ import React, { useState  } from "react";
 import { FieldType } from '@airtable/blocks/models';
 
 const EXPAND_CELL_WIDTH_PERCENTAGE		= '10%';
-const ITEM_CELL_WIDTH_PERCENTAGE		= '30%';
-const CATEGORY_CELL_WIDTH_PERCENTAGE	= '30%';
+const ITEM_CELL_WIDTH_PERCENTAGE		= '25%';
+const CATEGORY_CELL_WIDTH_PERCENTAGE	= '25%';
+const STOCK_CELL_WIDTH_PERCENTAGE		= '10%';
 const QUANTITY_CELL_WIDTH_PERCENTAGE	= '10%';
 const INCREASE_CELL_WIDTH_PERCENTAGE	= '10%';
 const DECREASE_CELL_WIDTH_PERCENTAGE	= '10%';
@@ -37,6 +41,7 @@ const GlobalConfigKeys = {
     TEMPLATE_TABLE_ID: 'templateTableId',
 	TEMPLATE_NAME_FIELD_ID: 'templateNameFieldId',
 	TEMPLATE_TYPE_FIELD_ID: 'templateTypeFieldId',
+	TEMPLATE_STOCK_FIELD_ID: 'templateStockFieldId',
 	FAMILY_TABLE_ID: 'familyTableId',
 	FAMILY_ID_FIELD_ID: 'idFieldId',
 	FAMILY_SURNAME_FIELD_ID: 'surnameFieldId',
@@ -54,10 +59,11 @@ class RecordProxy {
 	quantity = 0;
 	expanded = true;
 	header = true;
-	constructor(id, name, type, header){
+	constructor(id, name, type, stock, header){
 		this.id = id;
 		this.name = name;
 		this.type = type;
+		this.stock = stock;
 		this.quantity = 0;
 		this.expanded = true;
 		this.header = header;
@@ -94,6 +100,10 @@ class RecordProxy {
 	getType(){
 		return this.type;
 	}
+
+	getStock(){
+		return this.stock;
+	}
 	
 	getId(){
 		return this.id;
@@ -119,6 +129,7 @@ function Needs() {
     const templateTableId			= globalConfig.get(GlobalConfigKeys.TEMPLATE_TABLE_ID);
 	const templateNameFieldId		= globalConfig.get(GlobalConfigKeys.TEMPLATE_NAME_FIELD_ID );
 	const templateTypeFieldId		= globalConfig.get(GlobalConfigKeys.TEMPLATE_TYPE_FIELD_ID );
+	const templateStockFieldId		= globalConfig.get(GlobalConfigKeys.TEMPLATE_STOCK_FIELD_ID );
 	const familyTableId				= globalConfig.get(GlobalConfigKeys.FAMILY_TABLE_ID);
 	const idFieldId					= globalConfig.get(GlobalConfigKeys.FAMILY_ID_FIELD_ID);
 	const surnameFieldId			= globalConfig.get(GlobalConfigKeys.FAMILY_SURNAME_FIELD_ID);
@@ -129,7 +140,7 @@ function Needs() {
 	const needTypeFieldId			= globalConfig.get(GlobalConfigKeys.NEED_TYPE_FIELD_ID);
     const linkFieldId				= globalConfig.get(GlobalConfigKeys.NEED_FAMILY_LINK_FIELD_ID);
 	
-    const initialSetupDone = templateTableId && templateNameFieldId && templateTypeFieldId &&
+    const initialSetupDone = templateTableId && templateNameFieldId && templateTypeFieldId && templateStockFieldId &&
 							 familyTableId  && idFieldId &&
 							 surnameFieldId && addressFieldId && postcodeFieldId && needTableId && 
 							 needNameFieldId && needTypeFieldId && linkFieldId? true : false;
@@ -150,6 +161,7 @@ function Needs() {
 	
 	const templateNameField = templateTable ? templateTable.getFieldByIdIfExists(templateNameFieldId) : null;
 	const templateTypeField = templateTable ? templateTable.getFieldByIdIfExists(templateTypeFieldId) : null;
+	const templateStockField = templateTable ? templateTable.getFieldByIdIfExists(templateStockFieldId) : null;
 
 	const idField		= familyTable ? familyTable.getFieldByIdIfExists(idFieldId): null;
 	const surnameField 	= familyTable ? familyTable.getFieldByIdIfExists(surnameFieldId) : null;
@@ -203,6 +215,7 @@ function Needs() {
 					postcodeField={postcodeField}
 					templateNameField={templateNameField}
 					templateTypeField={templateTypeField}
+					templateStockField={templateStockField}
                     initialSetupDone={initialSetupDone}
                     onDoneClick={() => setIsShowingSettings(false)}
                 />
@@ -222,7 +235,7 @@ function Needs() {
 								variant="dark"
 								size="xlarge"
 								onClick={() => {familySelected(setFamilyRecId, record.id, templateRecords,
-														setWrapped, templateNameField, templateTypeField);
+														setWrapped, templateNameField, templateTypeField, templateStockField);
 								}}
 								
 							>
@@ -282,7 +295,7 @@ function Needs() {
 								size="xlarge"
 								onClick={() => {
 									familySelected(setFamilyRecId, record.id, templateRecords,
-														setWrapped, templateNameField, templateTypeField);
+														setWrapped, templateNameField, templateTypeField, templateStockField);
 								}}
 								
 							>
@@ -310,6 +323,9 @@ function HeaderRow() {
             </Cell>
             <Cell width={CATEGORY_CELL_WIDTH_PERCENTAGE}>
                 <Text textColor="light">Item Type</Text>
+            </Cell>
+            <Cell width={STOCK_CELL_WIDTH_PERCENTAGE}>
+                <Text textColor="light">Stock</Text>
             </Cell>
 			<Cell width={QUANTITY_CELL_WIDTH_PERCENTAGE}>
                 <Text textColor="light">Quantity</Text>
@@ -346,6 +362,10 @@ function ItemRow({record, key, wrapper, setter, name}) {
 					<Text variant="paragraph" margin={0} style={{whiteSpace: 'pre'}}>
 					</Text>
 				</Cell>
+				<Cell width={STOCK_CELL_WIDTH_PERCENTAGE}>
+					<Text variant="paragraph" margin={0} style={{whiteSpace: 'pre'}}>
+					</Text>
+				</Cell>
 				<Cell width={QUANTITY_CELL_WIDTH_PERCENTAGE}>
 					<Text variant="paragraph" margin={0} style={{whiteSpace: 'pre'}}>
 					</Text>
@@ -362,7 +382,7 @@ function ItemRow({record, key, wrapper, setter, name}) {
 			</Row>
 		);
 		
-	} else if (record.expanded && name.length == 0 || record.expanded && record.getName().toLowerCase().startsWith(name.toLowerCase())){
+	} else if (record.expanded && name.length == 0 || record.expanded && record.getName().toLowerCase().includes(name.toLowerCase())){
 		return (
 			<Row>
 				<Cell width={EXPAND_CELL_WIDTH_PERCENTAGE}>
@@ -374,6 +394,11 @@ function ItemRow({record, key, wrapper, setter, name}) {
 				<Cell width={CATEGORY_CELL_WIDTH_PERCENTAGE}>
 					<Text variant="paragraph" margin={0} style={{whiteSpace: 'pre'}}>
 						{record.getType()}
+					</Text>
+				</Cell>
+				<Cell width={STOCK_CELL_WIDTH_PERCENTAGE}>
+					<Text variant="paragraph" margin={0} style={{whiteSpace: 'pre'}}>
+						{record.getStock()}
 					</Text>
 				</Cell>
 				<Cell width={QUANTITY_CELL_WIDTH_PERCENTAGE}>
@@ -425,7 +450,7 @@ function Cell({children, width}) {
 // create the array of item to select from based on the records in the template table.
 // It does mean that additions to the template table will only be picked up for the next family
 // selected.  
-function familySelected(setFamilyRecId, recordid, templateRecords, setWrapped, templateNameField, templateTypeField){
+function familySelected(setFamilyRecId, recordid, templateRecords, setWrapped, templateNameField, templateTypeField, templateStockField){
 	const starter = [];
 	let cat = "";
 	
@@ -435,11 +460,13 @@ function familySelected(setFamilyRecId, recordid, templateRecords, setWrapped, t
 			starter.push(new RecordProxy(0,
 									 "",
 									 record.getCellValueAsString(templateTypeField),
+									 record.getCellValueAsString(templateStockField),
 									 true));
 		}
 		starter.push(new RecordProxy(record.id,
 									 record.getCellValue(templateNameField),
 									 record.getCellValueAsString(templateTypeField),
+									 record.getCellValueAsString(templateStockField),
 									 false));
 		cat = record.getCellValueAsString(templateTypeField);							 
 	}
@@ -554,6 +581,7 @@ function SettingsMenu(props) {
 		props.globalConfig.setAsync(GlobalConfigKeys.TEMPLATE_TABLE_ID, '');
 		props.globalConfig.setAsync(GlobalConfigKeys.TEMPLATE_NAME_FIELD_ID, '' );
 		props.globalConfig.setAsync(GlobalConfigKeys.TEMPLATE_TYPE_FIELD_ID, '' );		
+		props.globalConfig.setAsync(GlobalConfigKeys.TEMPLATE_STOCK_FIELD_ID, '' );		
 		props.globalConfig.setAsync(GlobalConfigKeys.FAMILY_TABLE_ID, '');
 		props.globalConfig.setAsync(GlobalConfigKeys.FAMILY_ID_FIELD_ID, '');
 		props.globalConfig.setAsync(GlobalConfigKeys.FAMILY_SURNAME_FIELD_ID, '');
@@ -713,6 +741,17 @@ function SettingsMenu(props) {
                                     size="small"
                                     table={props.templateTable}
                                     globalConfigKey={GlobalConfigKeys.TEMPLATE_TYPE_FIELD_ID}
+                                    allowedTypes={[
+                                        FieldType.SINGLE_LINE_TEXT,
+										FieldType.SINGLE_SELECT			
+                                    ]}
+                                />
+                            </FormField>
+                            <FormField label="Stock:" marginRight={1}>
+                                <FieldPickerSynced
+                                    size="small"
+                                    table={props.templateTable}
+                                    globalConfigKey={GlobalConfigKeys.TEMPLATE_STOCK_FIELD_ID}
                                     allowedTypes={[
                                         FieldType.SINGLE_LINE_TEXT,
 										FieldType.SINGLE_SELECT			
