@@ -8,6 +8,7 @@
 // 16/7/23	 v1.5 Jerry Barnes	Add facility to expand/contract items by catagory
 //								and a filter for the item name
 // 20/1/26   v1.6 Jerry Barnes	Make search any characters not just start of name, add stock level display
+// 24/3/26	 v1.7 Jerry Barnes  Fix bug when in settings not all dependent fields cleared on change
 //
 // The need table is called RequestItem now
 // The template table is call catalogue now
@@ -190,7 +191,7 @@ function Needs() {
 			return (familyId.length > 0 && family.getCellValue(idField) == familyId)
 		}) : null;
 		
-	const templateRecords = useRecords(templateTable && templateTypeField && templateNameField ? 
+	const templateRecords = useRecords(templateTable && templateTypeField && templateNameField && templateStockField ? 
 										templateTable.selectRecords(
 											{sorts: [
 												{field: templateTypeField},
@@ -592,6 +593,20 @@ function SettingsMenu(props) {
 		props.globalConfig.setAsync(GlobalConfigKeys.NEED_FAMILY_LINK_FIELD_ID, '');
 		
     };
+	
+	const resetTemplateTableRelatedKeys = () => {
+		props.globalConfig.setAsync(GlobalConfigKeys.TEMPLATE_NAME_FIELD_ID, '' );
+		props.globalConfig.setAsync(GlobalConfigKeys.TEMPLATE_TYPE_FIELD_ID, '' );		
+		props.globalConfig.setAsync(GlobalConfigKeys.TEMPLATE_STOCK_FIELD_ID, '' );		
+	};
+
+	const resetFamilyTableRelatedKeys = () => {
+		props.globalConfig.setAsync(GlobalConfigKeys.FAMILY_ID_FIELD_ID, '');
+		props.globalConfig.setAsync(GlobalConfigKeys.FAMILY_SURNAME_FIELD_ID, '');
+		props.globalConfig.setAsync(GlobalConfigKeys.FAMILY_ADDRESS_FIELD_ID, '');
+		props.globalConfig.setAsync(GlobalConfigKeys.FAMILY_POSTCODE_FIELD_ID, '');
+	};
+
 
     const getLinkedFamilyTable = () => {
         const linkFieldId = props.globalConfig.get(GlobalConfigKeys.NEED_FAMILY_LINK_FIELD_ID);
@@ -602,6 +617,7 @@ function SettingsMenu(props) {
         const familyTableId = linkField.options.linkedTableId;
 
         props.globalConfig.setAsync(GlobalConfigKeys.FAMILY_TABLE_ID, familyTableId);
+		resetFamilyTableRelatedKeys();
    };
 
     return(
@@ -718,6 +734,7 @@ function SettingsMenu(props) {
                 <FormField label="Which table holds the template?">
                     <TablePickerSynced
                         globalConfigKey={GlobalConfigKeys.TEMPLATE_TABLE_ID}
+						onChange={() => resetTemplateTableRelatedKeys()}
                         size="large"
                         maxWidth="350px"
                     />
