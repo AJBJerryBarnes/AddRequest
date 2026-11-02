@@ -9,6 +9,7 @@
 //								and a filter for the item name
 // 20/1/26   v1.6 Jerry Barnes	Make search any characters not just start of name, add stock level display
 // 24/3/26	 v1.7 Jerry Barnes  Fix bug when in settings not all dependent fields cleared on change
+// 2/11/26	 v1.8 Jerry Barnes  Allow for Cataloge item with no name (ignore it)
 //
 // The need table is called RequestItem now
 // The template table is call catalogue now
@@ -383,7 +384,7 @@ function ItemRow({record, key, wrapper, setter, name}) {
 			</Row>
 		);
 		
-	} else if (record.expanded && name.length == 0 || record.expanded && record.getName().toLowerCase().includes(name.toLowerCase())){
+	} else if (record.expanded && name.length == 0 && record.getName()|| record.expanded && record.getName() && record.getName().toLowerCase().includes(name.toLowerCase())){
 		return (
 			<Row>
 				<Cell width={EXPAND_CELL_WIDTH_PERCENTAGE}>
